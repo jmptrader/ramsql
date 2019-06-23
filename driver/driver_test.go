@@ -2,6 +2,7 @@ package ramsql
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -275,6 +276,120 @@ func TestBatch(t *testing.T) {
 
 }
 
+func TestCompareDateGT(t *testing.T) {
+	log.UseTestLogger(t)
+
+	db, err := sql.Open("ramsql", "TestCompareDateGT")
+	if err != nil {
+		t.Fatalf("sql.Open : Error : %s", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE comp (dat DATE);")
+	if err != nil {
+		t.Fatalf("Cannot create table: %s", err)
+	}
+
+	_, err = db.Exec("INSERT INTO comp (dat) VALUES ('2018-01-01')")
+	if err != nil {
+		t.Fatal("Cannot insert value")
+	}
+	_, err = db.Exec("INSERT INTO comp (dat) VALUES ('2019-01-01')")
+	if err != nil {
+		t.Fatal("Cannot insert value")
+	}
+	_, err = db.Exec("INSERT INTO comp (dat) VALUES ('2020-01-01')")
+	if err != nil {
+		t.Fatal("Cannot insert value")
+	}
+
+	query := "SELECT dat FROM comp WHERE dat > '2018-03-03'"
+
+	rows, err := db.Query(query, )
+	if err != nil {
+		t.Fatalf("sql.Query: %s", err)
+	}
+
+	var nb int
+	for rows.Next() {
+		var dat time.Time
+		if err := rows.Scan(&dat); err != nil {
+			t.Fatalf("Cannot scan row: %s", err)
+		}
+		unwantedDate, err := time.Parse("2006-01-02", "2018-01-01")
+		if err != nil {
+			t.Fatal("Cannot parse unwanted date", err)
+		}
+		if dat.Equal(unwantedDate) {
+			t.Fatalf("Unwanted row: %v", dat)
+		}
+
+		nb++
+	}
+
+	if nb != 2 {
+		t.Fatalf("Unwanted number of rows %d", nb)
+	}
+
+}
+
+func TestCompareDateLT(t *testing.T) {
+	log.UseTestLogger(t)
+
+	db, err := sql.Open("ramsql", "TestCompareDateLT")
+	if err != nil {
+		t.Fatalf("sql.Open : Error : %s", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("CREATE TABLE comp (dat DATE);")
+	if err != nil {
+		t.Fatalf("Cannot create table: %s", err)
+	}
+
+	_, err = db.Exec("INSERT INTO comp (dat) VALUES ('2018-01-01')")
+	if err != nil {
+		t.Fatal("Cannot insert value")
+	}
+	_, err = db.Exec("INSERT INTO comp (dat) VALUES ('2019-01-01')")
+	if err != nil {
+		t.Fatal("Cannot insert value")
+	}
+	_, err = db.Exec("INSERT INTO comp (dat) VALUES ('2020-01-01')")
+	if err != nil {
+		t.Fatal("Cannot insert value")
+	}
+
+	query := "SELECT dat FROM comp WHERE dat < '2019-03-03'"
+
+	rows, err := db.Query(query, )
+	if err != nil {
+		t.Fatalf("sql.Query: %s", err)
+	}
+
+	var nb int
+	for rows.Next() {
+		var dat time.Time
+		if err := rows.Scan(&dat); err != nil {
+			t.Fatalf("Cannot scan row: %s", err)
+		}
+		unwantedDate, err := time.Parse("2006-01-02", "2020-01-01")
+		if err != nil {
+			t.Fatal("Cannot parse unwanted date", err)
+		}
+		if dat.Equal(unwantedDate) {
+			t.Fatalf("Unwanted row: %v", dat)
+		}
+
+		nb++
+	}
+
+	if nb != 2 {
+		t.Fatalf("Unwanted number of rows %d", nb)
+	}
+
+}
+
 func TestDate(t *testing.T) {
 	log.UseTestLogger(t)
 
@@ -380,6 +495,62 @@ func TestAnd(t *testing.T) {
 	_, err = db.Exec(query, "Bruce", "Wayne")
 	if err != nil {
 		t.Fatalf("Cannot run UPDATE query with AND: %s\n", err)
+	}
+
+}
+
+func TestGreaterThanOrEqualAndLessThanOrEqual(t *testing.T) {
+	log.UseTestLogger(t)
+
+	batch := []string{
+		`CREATE TABLE user (name TEXT, surname TEXT, age INT);`,
+		`INSERT INTO user (name, surname, age) VALUES (Foo, Bar, 20);`,
+		`INSERT INTO user (name, surname, age) VALUES (John, Doe, 32);`,
+		`INSERT INTO user (name, surname, age) VALUES (Jane, Doe, 33);`,
+		`INSERT INTO user (name, surname, age) VALUES (Joe, Doe, 10);`,
+		`INSERT INTO user (name, surname, age) VALUES (Homer, Simpson, 40);`,
+		`INSERT INTO user (name, surname, age) VALUES (Marge, Simpson, 40);`,
+		`INSERT INTO user (name, surname, age) VALUES (Bruce, Wayne, 3333);`,
+	}
+
+	db, err := sql.Open("ramsql", "TestGreaterThanOrEqualAndLessThanOrEqual")
+	if err != nil {
+		t.Fatalf("sql.Open : Error : %s\n", err)
+	}
+	defer db.Close()
+
+	for _, b := range batch {
+		_, err = db.Exec(b)
+		if err != nil {
+			t.Fatalf("sql.Exec: Error: %s\n", err)
+		}
+	}
+
+	query := `SELECT * FROM user
+			WHERE user.age <= 40
+			AND age >= 32`
+
+	rows, err := db.Query(query)
+	if err != nil {
+		t.Fatalf("sql.Query: %s", err)
+	}
+
+	var nb int
+	for rows.Next() {
+		var name, surname string
+		var age int
+		if err := rows.Scan(&name, &surname, &age); err != nil {
+			t.Fatalf("Cannot scan row: %s", err)
+		}
+		if age < 32 || age > 40 {
+			t.Fatalf("Unwanted row: %s %s %d", name, surname, age)
+		}
+
+		nb++
+	}
+
+	if nb != 4 {
+		t.Fatalf("Expected 4 rows, got %d", nb)
 	}
 
 }
@@ -659,5 +830,69 @@ func TestUnique(t *testing.T) {
 	_, err = db.Exec(query)
 	if err == nil {
 		t.Fatalf("Expected error with UNIQUE violation")
+	}
+}
+
+func TestJSON(t *testing.T) {
+	log.UseTestLogger(t)
+
+	batch := []string{
+		`CREATE TABLE test (sequence_number BIGSERIAL PRIMARY KEY, data JSON)`,
+		`INSERT INTO test (data) VALUES ('{"id":"c05d13bd-9d9b-4ea1-95f2-9b11ed3a7d38","name":"test"}')`,
+	}
+
+	db, err := sql.Open("ramsql", "TestJSON")
+	if err != nil {
+		t.Fatalf("sql.Open : Error : %s\n", err)
+	}
+	defer db.Close()
+
+	for _, b := range batch {
+		_, err = db.Exec(b)
+		if err != nil {
+			t.Fatalf("sql.Exec: %s", err)
+		}
+	}
+
+	query := `SELECT data FROM test`
+	var data string
+	err = db.QueryRow(query).Scan(&data)
+	if err != nil {
+		t.Fatalf("sql.QueryRow: %s", err)
+	}
+	t.Logf("Result: %s\n", data)
+
+	s := struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}{}
+
+	err = json.Unmarshal([]byte(data), &s)
+	if err != nil {
+		t.Fatalf("json.Unmarshal 1: %s", err)
+	}
+	if s.ID != "c05d13bd-9d9b-4ea1-95f2-9b11ed3a7d38" || s.Name != "test" {
+		t.Fatalf("Unexpected values (first unmarshal): %+v\n", s)
+	}
+
+	query = `INSERT INTO test (data) VALUES ($1)`
+	_, err = db.Exec(query, data)
+	if err != nil {
+		t.Fatalf("db.Exec: %s", err)
+	}
+
+	query = `SELECT data FROM test WHERE sequence_number = 2`
+	err = db.QueryRow(query).Scan(&data)
+	if err != nil {
+		t.Fatalf("sql.QueryRow: %s", err)
+	}
+	t.Logf("Result: %s\n", data)
+
+	err = json.Unmarshal([]byte(data), &s)
+	if err != nil {
+		t.Fatalf("json.Unmarshal 2: %s", err)
+	}
+	if s.ID != "c05d13bd-9d9b-4ea1-95f2-9b11ed3a7d38" || s.Name != "test" {
+		t.Fatalf("Unexpected values (second unmarshal): %+v\n", s)
 	}
 }

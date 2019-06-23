@@ -104,7 +104,7 @@ func insert(r *Relation, attributes []*parser.Decl, values []*parser.Decl, retur
 				// Before adding value in tuple, check it's not a builtin func or arithmetic operation
 				switch values[x].Token {
 				case parser.NowToken:
-					t.Append(time.Now())
+					t.Append(time.Now().Format(parser.DateLongFormat))
 				default:
 					t.Append(values[x].Lexeme)
 

@@ -6,7 +6,7 @@ import (
 )
 
 func TestLexerSimple(t *testing.T) {
-	query := `CREATE TABLE account`
+	query := `CREATE TABLE `+"`"+`account`+"`"+``
 
 	lexer := lexer{}
 	decls, err := lexer.lex([]byte(query))
@@ -14,8 +14,8 @@ func TestLexerSimple(t *testing.T) {
 		t.Fatalf("Cannot lex <%s> string", query)
 	}
 
-	if len(decls) != 5 {
-		t.Fatalf("Lexing failed, expected 5 tokens, got %d", len(decls))
+	if len(decls) != 7 {
+		t.Fatalf("Lexing failed, expected 7 tokens, got %d", len(decls))
 	}
 }
 
@@ -26,5 +26,19 @@ func TestParseDate(t *testing.T) {
 	_, err := time.Parse(long, data)
 	if err != nil {
 		t.Fatalf("Cannot parse %s: %s", data, err)
+	}
+}
+
+func TestLexerWithGTOEandLTOEOperator(t *testing.T) {
+	query := `SELECT FROM foo WHERE 1 >= 1 AND 2 <= 3`
+
+	lexer := lexer{}
+	decls, err := lexer.lex([]byte(query))
+	if err != nil {
+		t.Fatalf("Cannot lex <%s> string", query)
+	}
+
+	if len(decls) != 21 {
+		t.Fatalf("Lexing failed, expected 21 tokens, got %d", len(decls))
 	}
 }
